@@ -42,13 +42,13 @@ class MockAuthService extends AuthService {
     await Future.delayed(const Duration(seconds: 2));
 
     if (simulateFailure) {
-      return const ApiResult.failure(ApiErrorMessages.auth);
+      return ApiResult.failure(ApiErrorMessages.auth);
     }
 
     final email = simulateUnauthorizedDomain ? 'student@gmail.com' : 'ananya.raj@college.edu';
 
     if (!isAllowedCollegeEmail(email)) {
-      return const ApiResult.failure(ApiErrorMessages.unauthorizedDomain);
+      return ApiResult.failure(ApiErrorMessages.unauthorizedDomain);
     }
 
     final user = AppUser(

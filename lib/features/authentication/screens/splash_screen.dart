@@ -55,20 +55,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 94,
-                height: 94,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Image.asset(
-                  'assets/images/stay_composed_logo.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 20),
               Text(
                 AppConstants.appName,
                 style: AppTextStyles.brandTitle.copyWith(color: Colors.white, fontSize: 26),

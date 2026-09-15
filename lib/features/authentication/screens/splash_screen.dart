@@ -56,13 +56,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 84,
-                height: 84,
+                width: 94,
+                height: 94,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(26),
                 ),
-                child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 44),
+                padding: const EdgeInsets.all(14),
+                child: Image.asset(
+                  'assets/images/stay_composed_logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
               const SizedBox(height: 20),
               Text(

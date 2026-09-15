@@ -7,15 +7,13 @@ class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
 
-  // TrueOwner (screens implemented in Phase 2)
+  // TrueOwner
   static const String trueOwnerDashboard = '/true-owner';
   static const String reportLost = '/true-owner/report-lost';
   static const String reportFound = '/true-owner/report-found';
-  static const String matches = '/true-owner/matches';
-  static const String verification = '/true-owner/verification';
+  static const String itemDetail = '/true-owner/item';
   static const String chat = '/true-owner/chat';
-  static const String myLostObjects = '/true-owner/my-lost';
-  static const String myFoundObjects = '/true-owner/my-found';
+  static const String claim = '/true-owner/claim';
 
   // Blood Donation (screens implemented in Phase 3)
   static const String bloodDashboard = '/blood-donation';
@@ -23,6 +21,11 @@ class AppRoutes {
   static const String activeBloodRequests = '/blood-donation/active';
   static const String myBloodRequests = '/blood-donation/mine';
 
+  // Blood Alert module
+  static const String sendBloodAlert = '/blood-donation/send-alert';
+  static const String myBloodAlerts = '/blood-donation/my-alerts';
+
   static const String profile = '/profile';
   static const String notifications = '/notifications';
+  static const String settings = '/settings';
 }

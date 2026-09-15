@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "109561697719",
+    "project_id": "stay-composed-app",
+    "storage_bucket": "stay-composed-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109561697719:android:8ab475b092270fba3e4432",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "109561697719-erncgboghjsm16q6ub6ku75unc3qesr6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.app",
+            "certificate_hash": "66d6ac68cccdd571c76647ce859b41b3d24e7630"
+          }
+        },
+        {
+          "client_id": "109561697719-lehccfslrn445g13787u8qopvgse33f9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6ij45YNHPr8eDVgST-r5U4H0LBHaCm_w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "109561697719-lehccfslrn445g13787u8qopvgse33f9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

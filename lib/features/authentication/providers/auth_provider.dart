@@ -2,11 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/api_result.dart';
 import '../../../models/user_model.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/google_auth_service.dart';
 
-/// Swap this single provider to switch from the mock service to a real
-/// implementation once the backend exists — nothing else in the app needs
-/// to change.
-final authServiceProvider = Provider<AuthService>((ref) => MockAuthService());
+/// Swap this single provider to switch auth implementations — nothing
+/// else in the app needs to change.
+///
+/// Real Google Sign-In is active. To go back to the offline mock for
+/// testing (no Google account / no internet needed), comment the real
+/// line and uncomment the mock one below.
+final authServiceProvider = Provider<AuthService>((ref) => GoogleAuthServiceImpl());
+// final authServiceProvider = Provider<AuthService>((ref) => MockAuthService());
 
 enum AuthStatus { unauthenticated, authenticating, authenticated, error, unauthorizedDomain }
 

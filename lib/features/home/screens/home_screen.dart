@@ -70,9 +70,9 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 14),
                   FeatureCard(
-                    title: 'Blood Donation',
+                    title: 'Blood Alert',
                     subtitle: 'Request or help someone in need.',
-                    buttonLabel: 'Open Blood Donation',
+                    buttonLabel: 'Open Blood Alert',
                     icon: Icons.favorite_rounded,
                     accentColor: AppColors.blood,
                     accentBackground: AppColors.bloodLight,

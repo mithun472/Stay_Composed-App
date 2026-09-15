@@ -14,7 +14,7 @@ class AppConstants {
   /// authorized college domains, ideally fetched from a remote config
   /// endpoint so it can change without a client release.
   static const List<String> allowedCollegeEmailDomains = [
-    'college.edu',
+    'tcarts.in',
   ];
 
   static const List<String> bloodGroups = [

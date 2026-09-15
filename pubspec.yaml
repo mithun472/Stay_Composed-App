@@ -13,7 +13,7 @@ dependencies:
 
   # State management
   flutter_riverpod: ^2.5.1
-
+  flutter_dotenv: ^5.1.0
   # Routing
   go_router: ^14.2.0
 
@@ -23,7 +23,7 @@ dependencies:
   # Images
   image_picker: ^1.1.2
   cached_network_image: ^3.3.1
-
+  web_socket_channel: ^3.0.1
   # Networking (abstracted behind services; not wired to a backend yet)
   dio: ^5.4.3+1
 
@@ -41,10 +41,20 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
 
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
+  assets:
+    - assets/images/
+    - .env
+
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/images/stay_composed_logo.png"
+  min_sdk_android: 21
+  # If your logo has transparent edges and looks cramped on Android's
+  # adaptive icon shapes, uncomment and tune these:
+  # adaptive_icon_background: "#FFFFFF"
+  # adaptive_icon_foreground: "assets/images/stay_composed_logo.png"

@@ -82,10 +82,10 @@ class _ReportItemScreenState extends ConsumerState<ReportItemScreen> {
       .where((t) => t.isNotEmpty)
       .toList();
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     try {
       final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 1600,
         imageQuality: 85,
       );
@@ -93,10 +93,43 @@ class _ReportItemScreenState extends ConsumerState<ReportItemScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open the gallery: $e')),
+          SnackBar(
+            content: Text(
+              source == ImageSource.camera ? 'Could not open the camera: $e' : 'Could not open the gallery: $e',
+            ),
+          ),
         );
       }
     }
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source != null) await _pickImage(source);
   }
 
   Future<void> _pickDate() async {
@@ -222,7 +255,7 @@ class _ReportItemScreenState extends ConsumerState<ReportItemScreen> {
             _ImagePickerTile(
               image: _pickedImage,
               required: !_isLost,
-              onPick: _pickImage,
+              onPick: _showImageSourceSheet,
               onClear: () => setState(() => _pickedImage = null),
             ),
             const SizedBox(height: 20),
@@ -234,9 +267,10 @@ class _ReportItemScreenState extends ConsumerState<ReportItemScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _category,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Category'),
               items: AppConstants.lostFoundCategories
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (v) => setState(() => _category = v),
               validator: (v) => v == null ? 'Choose a category' : null,
@@ -244,11 +278,12 @@ class _ReportItemScreenState extends ConsumerState<ReportItemScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _location,
+              isExpanded: true,
               decoration: InputDecoration(
                 labelText: _isLost ? 'Where did you lose it? (optional)' : 'Where did you find it?',
               ),
               items: CampusLocations.all
-                  .map((loc) => DropdownMenuItem(value: loc, child: Text(loc)))
+                  .map((loc) => DropdownMenuItem(value: loc, child: Text(loc, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (v) => setState(() => _location = v),
               validator: (v) {

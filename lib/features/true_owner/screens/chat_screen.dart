@@ -297,6 +297,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             controller: _composer,
             onSend: _send,
             onAnswer: _openClaim,
+            isFounder: _email.isNotEmpty && _email.toLowerCase() == _thread.founderEmail.toLowerCase(),
           ),
         ],
       ),
@@ -417,12 +418,14 @@ class _Composer extends StatelessWidget {
   final TextEditingController controller;
   final void Function(String text) onSend;
   final VoidCallback onAnswer;
+  final bool isFounder;
 
   const _Composer({
     required this.phase,
     required this.controller,
     required this.onSend,
     required this.onAnswer,
+    this.isFounder = false,
   });
 
   @override
@@ -436,7 +439,7 @@ class _Composer extends StatelessWidget {
         ),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: switch (phase) {
-          ChatPhase.preVerification => _CannedComposer(onSend: onSend),
+          ChatPhase.preVerification => _CannedComposer(onSend: onSend, isFounder: isFounder),
           ChatPhase.verifying => SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -491,10 +494,13 @@ class _Composer extends StatelessWidget {
 /// Pre-verification composer: tap-to-send prompts, no free text field.
 class _CannedComposer extends StatelessWidget {
   final void Function(String text) onSend;
-  const _CannedComposer({required this.onSend});
+  final bool isFounder;
+  const _CannedComposer({required this.onSend, this.isFounder = false});
 
   @override
   Widget build(BuildContext context) {
+    final prompts = isFounder ? CannedPrompts.forFinder : CannedPrompts.forOwner;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -502,7 +508,12 @@ class _CannedComposer extends StatelessWidget {
           children: [
             const Icon(Icons.shield_outlined, size: 14, color: AppColors.textSecondary),
             const SizedBox(width: 6),
-            Text('Suggested messages only, until verification', style: AppTextStyles.caption),
+            Text(
+              isFounder
+                  ? 'Finder templates (Questions & Answers)'
+                  : 'Owner templates (Questions & Answers)',
+              style: AppTextStyles.caption,
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -510,10 +521,10 @@ class _CannedComposer extends StatelessWidget {
           height: 40,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: CannedPrompts.forOwner.length,
+            itemCount: prompts.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final prompt = CannedPrompts.forOwner[index];
+              final prompt = prompts[index];
               return ActionChip(
                 label: Text(prompt),
                 backgroundColor: AppColors.trueOwnerLight,

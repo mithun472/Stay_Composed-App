@@ -18,9 +18,28 @@ class CannedPrompts {
 
   static const List<String> forOwner = [
     'Where exactly did you find it?',
-    'Can you describe the item?',
     'What time did you find it?',
+    'Can you describe the item\'s condition?',
     'Can you share a safe public meeting point?',
+    'Are you ready to initiate the verification challenge?',
+    'I lost it on campus earlier today.',
+    'I lost it near the library / canteen area.',
+    'It has my personal marks and contents inside.',
+    'I can verify the secret challenge questions.',
+    'Yes, I am available to meet and verify.',
+  ];
+
+  static const List<String> forFinder = [
+    'Can you describe key details or unique marks on the item?',
+    'When and where approximately did you lose it?',
+    'What brand, color, or model is the item?',
+    'Are you ready to answer the verification challenge?',
+    'Can you share a safe public meeting point?',
+    'I found it near the campus grounds / academic block.',
+    'I found it earlier today and kept it safe.',
+    'The item is in good condition and kept securely.',
+    'Let\'s coordinate at a campus security desk or public spot.',
+    'Please answer the verification challenge so we can proceed.',
   ];
 }
 

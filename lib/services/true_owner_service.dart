@@ -67,12 +67,16 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
     final result = await _client.post('/items', body);
     return result.when(
       success: (data) {
-        // Backend may echo the created item, wrap it, or return a bare ack.
-        final raw = data['item'] is Map<String, dynamic> ? data['item'] as Map<String, dynamic> : data;
-        if (raw['id'] != null || raw['_id'] != null) {
-          return ApiResult.success(Item.fromJson(raw));
+        try {
+          // Backend may echo the created item, wrap it, or return a bare ack.
+          final raw = data['item'] is Map<String, dynamic> ? data['item'] as Map<String, dynamic> : data;
+          if (raw['id'] != null || raw['_id'] != null) {
+            return ApiResult.success(Item.fromJson(raw));
+          }
+          return ApiResult.success(item);
+        } catch (e) {
+          return ApiResult.failure('Could not read the server response: $e');
         }
-        return ApiResult.success(item);
       },
       failure: (message) => ApiResult.failure(message),
     );
@@ -82,7 +86,13 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
   Future<ApiResult<MyItems>> getMine(String email) async {
     final result = await _client.get('/items/mine', query: {'email': email});
     return result.when(
-      success: (data) => ApiResult.success(MyItems.fromJson(data)),
+      success: (data) {
+        try {
+          return ApiResult.success(MyItems.fromJson(data));
+        } catch (e) {
+          return ApiResult.failure('Could not read your reports: $e');
+        }
+      },
       failure: (message) => ApiResult.failure(message),
     );
   }
@@ -100,20 +110,24 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
     });
     return result.when(
       success: (data) {
-        final raw = data['thread'] is Map<String, dynamic> ? data['thread'] as Map<String, dynamic> : data;
-        final thread = ChatThread.fromJson(raw);
-        if (thread.threadId.isEmpty) {
-          // Fall back to the documented id format rather than failing the
-          // whole action over a missing echo field.
-          return ApiResult.success(ChatThread(
-            threadId: '$complaintId:$foundItemId',
-            complaintId: complaintId,
-            foundItemId: foundItemId,
-            claimantEmail: requesterEmail,
-            founderEmail: '',
-          ));
+        try {
+          final raw = data['thread'] is Map<String, dynamic> ? data['thread'] as Map<String, dynamic> : data;
+          final thread = ChatThread.fromJson(raw);
+          if (thread.threadId.isEmpty) {
+            // Fall back to the documented id format rather than failing the
+            // whole action over a missing echo field.
+            return ApiResult.success(ChatThread(
+              threadId: '$complaintId:$foundItemId',
+              complaintId: complaintId,
+              foundItemId: foundItemId,
+              claimantEmail: requesterEmail,
+              founderEmail: '',
+            ));
+          }
+          return ApiResult.success(thread);
+        } catch (e) {
+          return ApiResult.failure('Could not open this chat: $e');
         }
-        return ApiResult.success(thread);
       },
       failure: (message) => ApiResult.failure(message),
     );
@@ -124,11 +138,16 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
     final result = await _client.get('/chat/my-threads', query: {'email': email});
     return result.when(
       success: (data) {
-        // ApiClient wraps top-level JSON arrays under 'items'.
-        final items = (data['items'] as List?) ?? const [];
-        return ApiResult.success(
-          items.whereType<Map<String, dynamic>>().map(ChatThread.fromJson).toList(),
-        );
+        try {
+          // ApiClient wraps top-level JSON arrays under 'items'.
+          final rawItems = data['items'];
+          final items = rawItems is List ? rawItems : const [];
+          return ApiResult.success(
+            items.whereType<Map<String, dynamic>>().map(ChatThread.fromJson).toList(),
+          );
+        } catch (e) {
+          return ApiResult.failure('Could not load your chats: $e');
+        }
       },
       failure: (message) => ApiResult.failure(message),
     );
@@ -139,15 +158,20 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
     final result = await _client.get('/chat/${_segment(threadId)}/messages', query: {'email': email});
     return result.when(
       success: (data) {
-        final items = (data['items'] as List?) ?? const [];
-        final messages =
-            items.whereType<Map<String, dynamic>>().map(ChatMessage.fromJson).toList();
-        messages.sort((a, b) {
-          final at = a.sentAt, bt = b.sentAt;
-          if (at == null || bt == null) return 0;
-          return at.compareTo(bt);
-        });
-        return ApiResult.success(messages);
+        try {
+          final rawItems = data['items'];
+          final items = rawItems is List ? rawItems : const [];
+          final messages =
+              items.whereType<Map<String, dynamic>>().map(ChatMessage.fromJson).toList();
+          messages.sort((a, b) {
+            final at = a.sentAt, bt = b.sentAt;
+            if (at == null || bt == null) return 0;
+            return at.compareTo(bt);
+          });
+          return ApiResult.success(messages);
+        } catch (e) {
+          return ApiResult.failure('Could not load messages for this chat: $e');
+        }
       },
       failure: (message) => ApiResult.failure(message),
     );
@@ -167,7 +191,13 @@ class TrueOwnerServiceImpl extends TrueOwnerService {
       'claimantEmail': claimantEmail,
     });
     return result.when(
-      success: (data) => ApiResult.success(ClaimResult.fromJson(data)),
+      success: (data) {
+        try {
+          return ApiResult.success(ClaimResult.fromJson(data));
+        } catch (e) {
+          return ApiResult.failure('Could not read the verification result: $e');
+        }
+      },
       failure: (message) => ApiResult.failure(message),
     );
   }

@@ -64,7 +64,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final async = ref.watch(myItemsProvider);
-    final mine = async.value;
+    // .valueOrNull avoids AsyncError.value's rethrow-on-access behavior —
+    // see true_owner_dashboard_screen.dart's _ChatsTab for the crash this
+    // caused when myItemsProvider errors (e.g. backend URL not set).
+    final mine = async.valueOrNull;
     final matches = mine?.matchesFor(item.id) ?? const <CandidateMatch>[];
     final threshold = mine?.chatConfidenceThreshold;
 

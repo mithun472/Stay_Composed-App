@@ -14,11 +14,17 @@ import '../models/chat_thread_model.dart';
 /// Frame shapes, straight from `app/routers/chat.py`:
 ///   New message      {"type": "message", "id", "threadId", "senderEmail", "text", "sentAt"}
 ///   Rejected message {"type": "error", "message", ["allowedMessages"]}
-///   Phase changed     {"event": "phase_changed", "status": "verification_pending" | "verified" | "handed_over"}
+///   Presence         {"type": "presence", "onlineEmails": [...], "userEmail", "status": "online"|"offline"}
+///   Moderation       {"type": "moderation_notice", "tier", "message", ["heldMessageCount"]}
+///   Frozen           {"type": "conversation_frozen", "message"}
+///   Phase changed    {"event": "phase_changed", "status": "verification_pending" | "verified" | "handed_over" | "frozen"}
 ///   (legacy, redundant with phase_changed — ignored here)
 ///     {"type": "verification_started", "startedAt"}
 ///     {"type": "verification_completed", "verified"}
 ///     {"type": "handover_completed", "completedBy", "handedOverAt"}
+///
+/// NOTE: presence uses top-level "type", phase changes use top-level
+/// "event" — these are two different keys, not interchangeable.
 ///
 /// The base URL is the same one Settings stores for REST, with the scheme
 /// swapped (https -> wss, http -> ws) so switching ngrok tunnels needs no
@@ -35,9 +41,15 @@ class ChatSocketService {
   /// pending case); callers map it, they don't compare it directly.
   final _phaseChanges = StreamController<String>.broadcast();
 
+  /// Emails currently connected to this thread's socket, lowercased.
+  /// Replayed in full on every presence frame (server sends the whole
+  /// set, not a delta), so consumers can just listen and rebuild.
+  final _presence = StreamController<Set<String>>.broadcast();
+
   Stream<ChatMessage> get messages => _messages.stream;
   Stream<String> get errors => _errors.stream;
   Stream<String> get phaseChanges => _phaseChanges.stream;
+  Stream<Set<String>> get presence => _presence.stream;
   bool get isConnected => _channel != null;
 
   static Uri? _socketUri(String baseUrl, String threadId, String email) {
@@ -51,23 +63,31 @@ class ChatSocketService {
     );
   }
 
+  /// Never throws — every failure path (missing/invalid URL, refused
+  /// connection, handshake timeout) resolves `false` and pushes a message
+  /// onto [errors] instead of letting an exception escape to the widget
+  /// tree.
   Future<bool> connect({required String threadId, required String email}) async {
     await disconnect();
 
-    final baseUrl = await BackendConfig.getBaseUrl();
-    if (baseUrl == null || baseUrl.isEmpty) {
-      _errors.add('Backend URL not set. Add your ngrok URL in Settings first.');
-      return false;
-    }
-
-    final uri = _socketUri(baseUrl, threadId, email);
-    if (uri == null) {
-      _errors.add('Backend URL looks invalid. Check it in Settings.');
-      return false;
-    }
-
     try {
+      final baseUrl = await BackendConfig.getBaseUrl();
+      if (baseUrl == null || baseUrl.isEmpty) {
+        _errors.add('Backend URL not set. Add your ngrok URL in Settings first.');
+        return false;
+      }
+
+      final uri = _socketUri(baseUrl, threadId, email);
+      if (uri == null) {
+        _errors.add('Backend URL looks invalid. Check it in Settings.');
+        return false;
+      }
+
       final channel = WebSocketChannel.connect(uri);
+      // Fail fast instead of silently queueing sends against a dead
+      // socket when the backend is unreachable (e.g. stale ngrok URL).
+      await channel.ready.timeout(const Duration(seconds: 6));
+
       _channel = channel;
       _sub = channel.stream.listen(
         _handleFrame,
@@ -108,10 +128,20 @@ class ChatSocketService {
     }
 
     final type = decoded['type'];
+
+    if (type == 'presence') {
+      final online = decoded['onlineEmails'];
+      if (online is List) {
+        _presence.add(online.map((e) => e.toString().toLowerCase()).toSet());
+      }
+      return;
+    }
+
     if (type == 'message') {
       _messages.add(ChatMessage.fromJson(decoded));
       return;
     }
+
     if (type == 'error') {
       final base = decoded['message']?.toString() ?? 'Message not allowed.';
       final allowed = decoded['allowedMessages'];
@@ -120,6 +150,18 @@ class ChatSocketService {
       } else {
         _errors.add(base);
       }
+      return;
+    }
+
+    if (type == 'moderation_notice') {
+      final msg = decoded['message']?.toString();
+      if (msg != null) _errors.add(msg);
+      return;
+    }
+
+    if (type == 'conversation_frozen') {
+      final msg = decoded['message']?.toString();
+      if (msg != null) _errors.add(msg);
       return;
     }
     // verification_started / verification_completed / handover_completed:
@@ -150,6 +192,7 @@ class ChatSocketService {
     await _messages.close();
     await _errors.close();
     await _phaseChanges.close();
+    await _presence.close();
   }
 }
 

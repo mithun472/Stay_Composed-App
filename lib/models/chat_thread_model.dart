@@ -31,7 +31,9 @@ class ChatThread extends Equatable {
   final String complaintId;
   final String foundItemId;
   final String claimantEmail;
+  final String claimantName;
   final String founderEmail;
+  final String founderName;
   final int confidence;
   final String status;
   final DateTime? createdAt;
@@ -43,7 +45,9 @@ class ChatThread extends Equatable {
     required this.complaintId,
     required this.foundItemId,
     required this.claimantEmail,
+    this.claimantName = '',
     required this.founderEmail,
+    this.founderName = '',
     this.confidence = 0,
     this.status = 'chat',
     this.createdAt,
@@ -59,7 +63,9 @@ class ChatThread extends Equatable {
       complaintId: json['complaintId']?.toString() ?? '',
       foundItemId: json['foundItemId']?.toString() ?? '',
       claimantEmail: json['claimantEmail']?.toString() ?? '',
+      claimantName: json['claimantName']?.toString() ?? '',
       founderEmail: json['founderEmail']?.toString() ?? '',
+      founderName: json['founderName']?.toString() ?? '',
       confidence: (json['confidence'] as num?)?.round() ?? 0,
       status: json['status']?.toString() ?? 'chat',
       createdAt: _date(json['createdAt']),
@@ -81,13 +87,28 @@ class ChatThread extends Equatable {
   bool get canSendFreeText => phase == ChatPhase.verified;
   bool get isClosed => phase == ChatPhase.handedOver;
 
+  /// Resolve an email in this thread (claimant or founder) to a display
+  /// name. Falls back to the email itself if no name was set server-side.
+  String nameForEmail(String email) {
+    final e = email.toLowerCase();
+    if (e == claimantEmail.toLowerCase()) {
+      return claimantName.isNotEmpty ? claimantName : claimantEmail;
+    }
+    if (e == founderEmail.toLowerCase()) {
+      return founderName.isNotEmpty ? founderName : founderEmail;
+    }
+    return email;
+  }
+
   ChatThread copyWith({String? status, DateTime? verificationStartedAt, DateTime? handedOverAt}) {
     return ChatThread(
       threadId: threadId,
       complaintId: complaintId,
       foundItemId: foundItemId,
       claimantEmail: claimantEmail,
+      claimantName: claimantName,
       founderEmail: founderEmail,
+      founderName: founderName,
       confidence: confidence,
       status: status ?? this.status,
       createdAt: createdAt,
@@ -97,7 +118,14 @@ class ChatThread extends Equatable {
   }
 
   @override
-  List<Object?> get props => [threadId, status, verificationStartedAt, handedOverAt];
+  List<Object?> get props => [
+        threadId,
+        status,
+        verificationStartedAt,
+        handedOverAt,
+        claimantName,
+        founderName,
+      ];
 }
 
 class ChatMessage extends Equatable {

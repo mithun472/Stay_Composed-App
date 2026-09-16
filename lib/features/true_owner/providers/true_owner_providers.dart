@@ -22,12 +22,24 @@ class NotSignedInException implements Exception {
   String toString() => 'Sign in with your college email first.';
 }
 
+class BackendUrlMissingException implements Exception {
+  @override
+  String toString() =>
+      'Backend URL not set. Add your ngrok URL in Settings first.';
+}
+
 /// Unwraps [ApiResult] into AsyncValue so screens can use .when() once
 /// rather than nesting a second switch inside every builder.
 T _unwrap<T>(ApiResult<T> result) {
   return result.when(
     success: (data) => data,
-    failure: (message) => throw Exception(message),
+    failure: (message) {
+      if (message == 'Backend URL not set. Add your ngrok URL in Settings first.') {
+        throw BackendUrlMissingException();
+      }
+
+      throw Exception(message);
+    },
   );
 }
 

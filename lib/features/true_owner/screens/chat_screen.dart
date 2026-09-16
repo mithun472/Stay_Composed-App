@@ -70,8 +70,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _init() async {
-    await _loadHistory();
-    await _connectSocket();
+    try {
+      await _loadHistory();
+      await _connectSocket();
+    } catch (e) {
+      // Anything unexpected here would otherwise escape as an unhandled
+      // async error (since nothing awaits _init()) and show Flutter's raw
+      // error screen instead of our own AppErrorView.
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+      return;
+    }
     // Primary path: the server pushes a `phase_changed` event the instant
     // the finder starts verification or a claim/handover completes (see
     // ChatSocketService.phaseChanges). The poll below is only a safety net

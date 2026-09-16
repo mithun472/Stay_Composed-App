@@ -7,6 +7,8 @@ class AppUser extends Equatable {
   final String? photoUrl;
   final String? department;
   final String? year;
+  final String? regNo;
+  final String? section;
   final bool isVerifiedCollegeAccount;
 
   const AppUser({
@@ -16,6 +18,8 @@ class AppUser extends Equatable {
     this.photoUrl,
     this.department,
     this.year,
+    this.regNo,
+    this.section,
     this.isVerifiedCollegeAccount = false,
   });
 
@@ -27,6 +31,8 @@ class AppUser extends Equatable {
       photoUrl: json['photoUrl'] as String?,
       department: json['department'] as String?,
       year: json['year'] as String?,
+      regNo: json['regNo'] as String?,
+      section: json['section'] as String?,
       isVerifiedCollegeAccount: json['isVerifiedCollegeAccount'] as bool? ?? false,
     );
   }
@@ -38,6 +44,8 @@ class AppUser extends Equatable {
         'photoUrl': photoUrl,
         'department': department,
         'year': year,
+        'regNo': regNo,
+        'section': section,
         'isVerifiedCollegeAccount': isVerifiedCollegeAccount,
       };
 
@@ -46,6 +54,8 @@ class AppUser extends Equatable {
     String? photoUrl,
     String? department,
     String? year,
+    String? regNo,
+    String? section,
   }) {
     return AppUser(
       id: id,
@@ -54,10 +64,13 @@ class AppUser extends Equatable {
       photoUrl: photoUrl ?? this.photoUrl,
       department: department ?? this.department,
       year: year ?? this.year,
+      regNo: regNo ?? this.regNo,
+      section: section ?? this.section,
       isVerifiedCollegeAccount: isVerifiedCollegeAccount,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, collegeEmail, photoUrl, department, year, isVerifiedCollegeAccount];
+  List<Object?> get props =>
+      [id, name, collegeEmail, photoUrl, department, year, regNo, section, isVerifiedCollegeAccount];
 }

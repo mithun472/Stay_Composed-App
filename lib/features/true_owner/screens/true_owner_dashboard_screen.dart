@@ -96,10 +96,19 @@ class _MyItemsTab extends ConsumerWidget {
 
     return async.when(
       loading: () => const AppLoadingView(message: 'Loading your reports...'),
-      error: (e, _) => AppErrorView(
-        message: e.toString().replaceFirst('Exception: ', ''),
-        onRetry: () => ref.invalidate(myItemsProvider),
-      ),
+      error: (e, _) {
+  if (e is BackendUrlMissingException) {
+    return AppErrorView(
+      message: 'Please configure your backend URL in Settings first.',
+      onRetry: () => ref.invalidate(myItemsProvider),
+    );
+  }
+
+  return AppErrorView(
+    message: e.toString().replaceFirst('Exception: ', ''),
+    onRetry: () => ref.invalidate(myItemsProvider),
+  );
+},
       data: (mine) {
         final items = type == 'lost' ? mine.myComplaints : mine.myFoundItems;
 
@@ -143,15 +152,28 @@ class _ChatsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myThreadsProvider);
-    final items = ref.watch(myItemsProvider).value;
+    // .valueOrNull, not .value: myItemsProvider may be in an error state
+    // (e.g. backend URL not set) and .value rethrows the stored error on
+    // access, which would crash this build() even though async.when()
+    // below already handles myThreadsProvider's own error state.
+    final items = ref.watch(myItemsProvider).valueOrNull;
 
     return async.when(
-      loading: () => const AppLoadingView(message: 'Loading your chats...'),
-      error: (e, _) => AppErrorView(
-        message: e.toString().replaceFirst('Exception: ', ''),
+  loading: () => const AppLoadingView(message: 'Loading your chats...'),
+  error: (e, _) {
+    if (e is BackendUrlMissingException) {
+      return AppErrorView(
+        message: 'Please configure your backend URL in Settings first.',
         onRetry: () => ref.invalidate(myThreadsProvider),
-      ),
-      data: (threads) {
+      );
+    }
+
+    return AppErrorView(
+      message: e.toString().replaceFirst('Exception: ', ''),
+      onRetry: () => ref.invalidate(myThreadsProvider),
+    );
+  },
+  data: (threads) {
         if (threads.isEmpty) {
           return AppEmptyView(
             icon: Icons.forum_outlined,

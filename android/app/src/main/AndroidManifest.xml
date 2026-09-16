@@ -1,8 +1,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 13+ (API 33) requires this be requested at runtime too —
+         see PushNotificationService.initialize(), which calls
+         FirebaseMessaging.requestPermission(). Declaring it here alone is
+         not enough; the runtime request is what actually shows the
+         system dialog on 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="Stay Composed"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- Default FCM notification channel + icon/color. Without the
+             channel meta-data, background/terminated notifications fall
+             back to a generic Android system channel — usually still
+             works, but user can't control it individually in system
+             settings, and it won't match this app's default_channel
+             referenced in PushNotificationService. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="default_channel" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

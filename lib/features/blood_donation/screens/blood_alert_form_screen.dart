@@ -10,6 +10,11 @@ import '../../authentication/providers/auth_provider.dart';
 /// Form: Name, Blood Group, Phone Number -> "Send Blood Alert"
 /// -> POST /blood-alert. Backend mails every department; app never mails
 /// directly and no department field is collected here.
+///
+/// Blood Group dropdown includes an "Others" entry — picking it reveals a
+/// free-text field for cases outside the standard A/B/AB/O +- set (rare
+/// types, animal donation drives, typos in records, etc). The typed value
+/// becomes the alert's bloodType, not the literal "Others" string.
 class BloodAlertFormScreen extends ConsumerStatefulWidget {
   const BloodAlertFormScreen({super.key});
 
@@ -18,17 +23,23 @@ class BloodAlertFormScreen extends ConsumerStatefulWidget {
 }
 
 class _BloodAlertFormScreenState extends ConsumerState<BloodAlertFormScreen> {
+  static const String _othersValue = 'Others';
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _otherBloodGroupController = TextEditingController();
 
   String? _bloodGroup;
   bool _isSending = false;
+
+  bool get _isOthersSelected => _bloodGroup == _othersValue;
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _otherBloodGroupController.dispose();
     super.dispose();
   }
 
@@ -37,6 +48,16 @@ class _BloodAlertFormScreenState extends ConsumerState<BloodAlertFormScreen> {
     if (_bloodGroup == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Choose a blood group.')),
+      );
+      return;
+    }
+
+    final resolvedBloodType =
+        _isOthersSelected ? _otherBloodGroupController.text.trim() : _bloodGroup!;
+
+    if (resolvedBloodType.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the blood group.')),
       );
       return;
     }
@@ -53,7 +74,7 @@ class _BloodAlertFormScreenState extends ConsumerState<BloodAlertFormScreen> {
 
     final alert = BloodAlert(
       studentName: _nameController.text.trim(),
-      bloodType: _bloodGroup!,
+      bloodType: resolvedBloodType,
       phoneNumber: _phoneController.text.trim(),
       senderEmail: email,
     );
@@ -94,12 +115,29 @@ class _BloodAlertFormScreenState extends ConsumerState<BloodAlertFormScreen> {
             DropdownButtonFormField<String>(
               value: _bloodGroup,
               decoration: const InputDecoration(labelText: 'Choose Blood Group'),
-              items: AppConstants.bloodGroups
-                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                  .toList(),
-              onChanged: (v) => setState(() => _bloodGroup = v),
+              items: [
+                ...AppConstants.bloodGroups.map((g) => DropdownMenuItem(value: g, child: Text(g))),
+                const DropdownMenuItem(value: _othersValue, child: Text(_othersValue)),
+              ],
+              onChanged: (v) => setState(() {
+                _bloodGroup = v;
+                if (v != _othersValue) _otherBloodGroupController.clear();
+              }),
               validator: (v) => v == null ? 'Choose a blood group' : null,
             ),
+            if (_isOthersSelected) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _otherBloodGroupController,
+                decoration: const InputDecoration(
+                  labelText: 'Enter blood group',
+                  hintText: 'e.g. Bombay Blood Group',
+                ),
+                validator: (v) => _isOthersSelected && (v == null || v.trim().isEmpty)
+                    ? 'Enter the blood group'
+                    : null,
+              ),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _phoneController,

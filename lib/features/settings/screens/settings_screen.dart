@@ -21,6 +21,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _urlController = TextEditingController();
   String? _statusMessage;
   bool _isTesting = false;
+  bool _lastTestFailed = false;
 
   @override
   void initState() {
@@ -36,12 +37,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _save() async {
     final url = _urlController.text.trim();
     if (url.isEmpty || !(url.startsWith('http://') || url.startsWith('https://'))) {
-      setState(() => _statusMessage = 'Enter a full URL, starting with http:// or https://');
+      setState(() {
+        _statusMessage = 'Enter a full URL, starting with http:// or https://';
+        _lastTestFailed = true;
+      });
       return;
     }
     await ref.read(backendUrlProvider.notifier).update(url);
     if (!mounted) return;
-    setState(() => _statusMessage = 'Saved.');
+    setState(() {
+      _statusMessage = 'Saved.';
+      _lastTestFailed = false;
+    });
   }
 
   Future<void> _testConnection() async {
@@ -49,16 +56,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _isTesting = true;
       _statusMessage = null;
     });
+
     final url = _urlController.text.trim();
+    HttpClient? client;
     try {
       final uri = Uri.parse(url);
-      final client = HttpClient();
+      client = HttpClient();
       final request = await client.getUrl(uri).timeout(const Duration(seconds: 8));
+      // ngrok's free-tier browser-warning interstitial only kicks in for
+      // requests that look like they came from a browser, but this header
+      // is harmless to send always and avoids that page intercepting the
+      // real response if ngrok ever changes that behavior.
+      request.headers.set('ngrok-skip-browser-warning', 'true');
       final response = await request.close().timeout(const Duration(seconds: 8));
-      setState(() => _statusMessage = 'Reachable (status ${response.statusCode}).');
+      // Drain the body so the connection is released cleanly even though
+      // we don't need the content.
+      await response.drain<void>();
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        setState(() {
+          _statusMessage = 'Reachable (status ${response.statusCode}).';
+          _lastTestFailed = false;
+        });
+      } else if (response.statusCode == 404 ||
+          response.statusCode == 502 ||
+          response.statusCode == 503 ||
+          response.statusCode == 522 ||
+          response.statusCode == 523) {
+        // The ngrok *edge* answered — the tunnel itself is up — but these
+        // codes are what ngrok returns when nothing is listening on the
+        // other end (backend process stopped/crashed) or the tunnel has
+        // expired. That's not the same as the backend actually working,
+        // so don't call it "Reachable".
+        setState(() {
+          _statusMessage =
+              "Tunnel is up, but the backend isn't responding (status ${response.statusCode}). "
+              'Check that the Python server is still running.';
+          _lastTestFailed = true;
+        });
+      } else {
+        setState(() {
+          _statusMessage = 'Backend responded with an error (status ${response.statusCode}).';
+          _lastTestFailed = true;
+        });
+      }
     } catch (e) {
-      setState(() => _statusMessage = "Couldn't reach that URL: $e");
+      setState(() {
+        _statusMessage = "Couldn't reach that URL: $e";
+        _lastTestFailed = true;
+      });
     } finally {
+      client?.close();
       if (mounted) setState(() => _isTesting = false);
     }
   }
@@ -116,9 +164,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Text(
               _statusMessage!,
               style: AppTextStyles.bodyMuted.copyWith(
-                color: _statusMessage!.startsWith("Couldn't")
-                    ? AppColors.error
-                    : AppColors.success,
+                color: _lastTestFailed ? AppColors.error : AppColors.success,
               ),
             ),
           ],

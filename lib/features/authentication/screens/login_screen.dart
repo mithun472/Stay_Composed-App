@@ -111,14 +111,13 @@ class _Brand extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
+        SizedBox(
           width: 72,
           height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            'assets/images/stay_composed_logo.png',
+            fit: BoxFit.contain,
           ),
-          child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 38),
         ),
         const SizedBox(height: 20),
         Text(AppConstants.appName, style: AppTextStyles.brandTitle),

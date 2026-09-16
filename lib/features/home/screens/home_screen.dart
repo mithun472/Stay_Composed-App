@@ -49,7 +49,9 @@ class HomeScreen extends ConsumerWidget {
                   userName: user?.name ?? 'Student',
                   photoUrl: user?.photoUrl,
                   onProfileTap: () {}, // TODO: navigate to Profile screen (Phase 4)
-                  onNotificationsTap: () {}, // TODO: navigate to Notifications screen (Phase 4)
+                  // NOTE: AppRoutes.notifications must exist in app_routes.dart
+                  // and route to NotificationsScreen — add it if missing.
+                  onNotificationsTap: () => context.push(AppRoutes.notifications),
                   onLogout: () => _confirmLogout(context, ref),
                 ),
               ),

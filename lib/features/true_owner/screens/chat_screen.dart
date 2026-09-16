@@ -17,15 +17,12 @@ import '../widgets/true_owner_widgets.dart';
 /// WhatsApp-style thread between owner and finder, with the composer
 /// swapped out per [ChatPhase]:
 ///
-///   preVerification -> canned prompt chips only
+///   preVerification -> canned prompt chips + free text (backend already
+///                       accepts arbitrary text pre-verification; the chips
+///                       are just quick-start suggestions, not a lock)
 ///   verifying       -> locked, CTA to answer the challenge questions
 ///   verified        -> free text + complete-handover action
 ///   handedOver      -> read-only
-///
-/// NOTE: the canned-only restriction is enforced here, in the client. The
-/// backend currently still accepts arbitrary text on the socket before
-/// verification, so this is a usability guard rather than a security one
-/// until that server-side check exists.
 class ChatScreen extends ConsumerStatefulWidget {
   final ChatThread thread;
   const ChatScreen({super.key, required this.thread});
@@ -47,7 +44,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   StreamSubscription<ChatMessage>? _msgSub;
   StreamSubscription<String>? _errSub;
   StreamSubscription<String>? _phaseSub;
+  StreamSubscription<Set<String>>? _presenceSub;
   Timer? _phasePoll;
+  Set<String> _onlineEmails = {};
 
   String get _email => ref.read(currentEmailProvider) ?? '';
 
@@ -63,6 +62,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _msgSub?.cancel();
     _errSub?.cancel();
     _phaseSub?.cancel();
+    _presenceSub?.cancel();
     _phasePoll?.cancel();
     _scroll.dispose();
     _composer.dispose();
@@ -140,6 +140,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await _msgSub?.cancel();
     await _errSub?.cancel();
     await _phaseSub?.cancel();
+    await _presenceSub?.cancel();
 
     final socket = ref.read(chatSocketServiceProvider);
     _msgSub = socket.messages.listen((message) {
@@ -153,8 +154,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (mounted) _snack(message);
     });
     _phaseSub = socket.phaseChanges.listen(_applyPhaseEvent);
+    _presenceSub = socket.presence.listen((emails) {
+      if (mounted) setState(() => _onlineEmails = emails);
+    });
     await socket.connect(threadId: _thread.threadId, email: _email);
   }
+
+  /// The provider is `.autoDispose` and this screen only ever `ref.read`s
+  /// it — a read alone registers no listener, so without this watch the
+  /// provider (and its socket) gets torn down again right after connect,
+  /// on the very next frame. That's what produced "Reconnecting..." on
+  /// every quick-message tap: the socket was already dead by the time you
+  /// tapped. Watching here (result unused) just keeps a listener alive
+  /// for as long as this screen is mounted, which is exactly the socket's
+  /// intended lifetime.
+  void _keepSocketAlive() => ref.watch(chatSocketServiceProvider);
 
   Future<void> _refreshPhase() async {
     final result = await ref.read(trueOwnerServiceProvider).getMyThreads(_email);
@@ -259,7 +273,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _keepSocketAlive();
     final phase = _thread.phase;
+    final otherEmail = _email.toLowerCase() == _thread.founderEmail.toLowerCase()
+        ? _thread.claimantEmail
+        : _thread.founderEmail;
+    final isOtherOnline = _onlineEmails.contains(otherEmail.toLowerCase());
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -268,7 +287,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Finder'),
-            Text(phase.label, style: AppTextStyles.caption),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(phase.label, style: AppTextStyles.caption),
+                if (phase != ChatPhase.handedOver) ...[
+                  const Text('  \u2022  ', style: AppTextStyles.caption),
+                  Icon(
+                    Icons.circle,
+                    size: 8,
+                    color: isOtherOnline ? AppColors.success : AppColors.textDisabled,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isOtherOnline ? 'Online' : 'Offline',
+                    style: AppTextStyles.caption,
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
         actions: [
@@ -452,7 +489,43 @@ class _Composer extends StatelessWidget {
         ),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: switch (phase) {
-          ChatPhase.preVerification => _CannedComposer(onSend: onSend, isFounder: isFounder),
+          ChatPhase.preVerification => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _CannedComposer(onSend: onSend, isFounder: isFounder),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'Message (never share secret details)',
+                          filled: true,
+                          fillColor: AppColors.surfaceMuted,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(24)),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                        onSubmitted: onSend,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CircleAvatar(
+                      backgroundColor: AppColors.trueOwner,
+                      child: IconButton(
+                        icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                        onPressed: () => onSend(controller.text),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ChatPhase.verifying => SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

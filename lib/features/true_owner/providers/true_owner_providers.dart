@@ -71,7 +71,7 @@ final threadByIdProvider =
 
 /// Refresh everything the true-owner screens read. Called after creating
 /// an item, opening a thread, claiming, or completing a handover.
-void invalidateTrueOwner(Ref ref) {
+void invalidateTrueOwner(WidgetRef ref) {
   ref.invalidate(myItemsProvider);
   ref.invalidate(myThreadsProvider);
 }

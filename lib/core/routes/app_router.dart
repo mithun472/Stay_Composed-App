@@ -15,6 +15,9 @@ import '../../features/blood_donation/screens/blood_donation_dashboard_screen.da
 import '../../features/blood_donation/screens/blood_alert_form_screen.dart';
 import '../../features/blood_donation/screens/my_blood_alerts_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+// ASSUMPTION: adjust this path to wherever notifications_screen.dart
+// actually lands in your feature folder structure.
+import '../../features/notifications/screens/notifications_screen.dart';
 import '../../models/item_model.dart';
 import '../../models/chat_thread_model.dart';
 import 'app_routes.dart';
@@ -67,6 +70,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.splash, builder: (context, state) => const SplashScreen()),
       GoRoute(path: AppRoutes.login, builder: (context, state) => const LoginScreen()),
       GoRoute(path: AppRoutes.home, builder: (context, state) => const HomeScreen()),
+
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
 
       // TrueOwner. Detail/chat/claim take their subject via `extra` rather
       // than an id path param — the objects are already in hand when we

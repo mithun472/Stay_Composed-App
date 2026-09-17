@@ -164,6 +164,20 @@ class ChatSocketService {
       if (msg != null) _errors.add(msg);
       return;
     }
+
+    if (type == 'ping') {
+      // Server's presence sweep (app/routers/chat.py: ConnectionManager)
+      // only refreshes `_last_seen` when it receives *any* frame from us —
+      // previously nothing replied to these, so an idle-but-connected
+      // socket relied solely on real chat messages to stay marked
+      // "online", and a socket that actually died silently (backgrounded
+      // app, dropped network, no clean close) could stay marked online
+      // indefinitely since `ws.send_json` rarely raises on a half-dead
+      // mobile connection. Echoing a pong here is what lets the server's
+      // liveness check mean something in both directions.
+      _channel?.sink.add(jsonEncode({'type': 'pong'}));
+      return;
+    }
     // verification_started / verification_completed / handover_completed:
     // redundant with the phase_changed event above — nothing to do.
   }

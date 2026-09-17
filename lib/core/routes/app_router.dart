@@ -14,6 +14,7 @@ import '../../features/true_owner/screens/claim_screen.dart';
 import '../../features/blood_donation/screens/blood_donation_dashboard_screen.dart';
 import '../../features/blood_donation/screens/blood_alert_form_screen.dart';
 import '../../features/blood_donation/screens/my_blood_alerts_screen.dart';
+import '../../features/profile/screens/profile_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 // ASSUMPTION: adjust this path to wherever notifications_screen.dart
 // actually lands in your feature folder structure.
@@ -130,6 +131,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.myBloodAlerts,
         builder: (context, state) => const MyBloodAlertsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
         path: AppRoutes.settings,

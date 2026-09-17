@@ -128,7 +128,12 @@ class PushNotificationService {
   void _refreshForMessage(WidgetRef ref, Map<String, dynamic> data) {
     ref.read(notificationsProvider.notifier).fetch();
     final type = data['type'] as String?;
-    if (type == 'match_found' || type == 'chat_message') {
+    // 'chat_opened' is what app/routers/chat.py actually sends the founder
+    // when a claimant opens a thread on their item — 'match_found' was my
+    // guess and doesn't match any type string in that file (may exist in
+    // a separate items.py matching flow I haven't seen; harmless to keep
+    // as a no-op check if it never fires).
+    if (type == 'match_found' || type == 'chat_opened' || type == 'chat_message') {
       invalidateTrueOwner(ref);
     }
   }
@@ -156,6 +161,12 @@ class PushNotificationService {
       case 'match_found':
         router.go(AppRoutes.trueOwnerDashboard);
         break;
+      case 'chat_opened':
+        // Sent to a founder when a claimant opens a thread on their item
+        // (app/routers/chat.py::get_or_create_thread) — previously fell
+        // through to `default` and did nothing on tap. relatedId here is
+        // a real thread id, same shape as chat_message's, but we don't
+        // have a fetch-by-id path wired up yet either — dashboard for now.
       case 'chat_message':
         final threadId = data['relatedId'] as String?;
         if (threadId == null) break;

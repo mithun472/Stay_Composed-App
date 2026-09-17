@@ -50,6 +50,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   String get _email => ref.read(currentEmailProvider) ?? '';
 
+  /// Raw names come as "<regno> <actual name> <dept code>", e.g.
+  /// "24SUCA11 Mithun Maharajan K B.C.A" — regno and dept sandwich the
+  /// real name. Strip a leading regno-shaped token (digits+letters+digits,
+  /// e.g. 24SUCA11) and a trailing dept-code token (short, all caps,
+  /// optionally dotted, e.g. B.C.A, MBA, M.SC) and keep only the middle.
+  static String _cleanName(String raw) {
+    var working = raw.trim();
+    // Backend prefixes some names with a generic "Campus Member" label
+    // (e.g. pre-verification masking) — strip that label only, keep
+    // whatever follows (masked or not) as-is.
+    working = working.replaceFirst(RegExp(r'^Campus Member\s+', caseSensitive: false), '');
+
+    final tokens = working.split(RegExp(r'\s+'));
+    if (tokens.isEmpty || working.isEmpty) return working;
+
+    final regNo = RegExp(r'^\d{2}[A-Za-z]{2,8}\d{1,4}$');
+    final deptCode = RegExp(r'^[A-Z](\.[A-Z]){1,4}\.?$|^[A-Z]{2,6}$');
+
+    var start = 0;
+    var end = tokens.length;
+    if (start < end && regNo.hasMatch(tokens[start])) start++;
+    if (end > start && deptCode.hasMatch(tokens[end - 1])) end--;
+
+    final middle = tokens.sublist(start, end);
+    return middle.isEmpty ? working : middle.join(' ');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -145,8 +172,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final socket = ref.read(chatSocketServiceProvider);
     _msgSub = socket.messages.listen((message) {
       if (!mounted) return;
-      // The echo of our own send arrives here too; dedupe on id.
-      if (_messages.any((m) => m.id.isNotEmpty && m.id == message.id)) return;
+      // Real msg with this id already in list (rare double-broadcast) — skip.
+      if (message.id.isNotEmpty && _messages.any((m) => m.id == message.id)) return;
+
+      // Own message echoing back from server: id here is 'local-...'
+      // (optimistic bubble) vs real 'msg-...' (server id) — they never
+      // match on id, so the old check let both sit in the list forever.
+      // That's the double-send: "Hello" shows once from _send()'s local
+      // bubble, once from this echo. Swap the placeholder for the real
+      // one instead of appending a second bubble.
+      if (message.senderEmail.toLowerCase() == _email.toLowerCase()) {
+        final localIdx = _messages.indexWhere(
+          (m) => m.id.startsWith('local-') && m.text == message.text,
+        );
+        if (localIdx != -1) {
+          setState(() {
+            final updated = [..._messages];
+            updated[localIdx] = message;
+            _messages = updated;
+          });
+          _scrollToEnd();
+          return;
+        }
+      }
       setState(() => _messages = [..._messages, message]);
       _scrollToEnd();
     });
@@ -229,7 +277,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToEnd();
   }
 
+  bool get _isFounder =>
+      _email.isNotEmpty && _email.toLowerCase() == _thread.founderEmail.toLowerCase();
+
   Future<void> _openClaim() async {
+    // Guard: only the claimant answers the challenge. The finder set the
+    // questions — they must never be the one submitting answers to them.
+    if (_isFounder) return;
     final changed = await context.push<bool>(AppRoutes.claim, extra: _thread);
     if (changed == true && mounted) {
       await _refreshPhase();
@@ -279,6 +333,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? _thread.claimantEmail
         : _thread.founderEmail;
     final isOtherOnline = _onlineEmails.contains(otherEmail.toLowerCase());
+    // Show the OTHER party, never me — I already know who I am. Role is
+    // whichever the other email actually matches on the thread, never
+    // hardcoded, so it can't show my own label back to me.
+    final otherIsFounder = otherEmail.toLowerCase() == _thread.founderEmail.toLowerCase();
+    final otherRoleLabel = otherIsFounder ? 'Founder' : 'Claimant';
+    final otherName = _cleanName(_thread.nameForEmail(otherEmail));
+    final otherDisplay = (otherName.isNotEmpty && otherName != otherEmail)
+        ? '$otherRoleLabel: $otherName'
+        : otherRoleLabel;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -286,7 +349,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Finder'),
+            Text(
+              otherDisplay,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -319,7 +386,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
-          _PhaseBanner(phase: phase, onAnswer: _openClaim),
+          _PhaseBanner(phase: phase, onAnswer: _openClaim, isFounder: _isFounder),
           Expanded(
             child: _loading
                 ? const AppLoadingView(message: 'Loading chat...')
@@ -347,7 +414,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             controller: _composer,
             onSend: _send,
             onAnswer: _openClaim,
-            isFounder: _email.isNotEmpty && _email.toLowerCase() == _thread.founderEmail.toLowerCase(),
+            isFounder: _isFounder,
           ),
         ],
       ),
@@ -414,7 +481,8 @@ class _Bubble extends StatelessWidget {
 class _PhaseBanner extends StatelessWidget {
   final ChatPhase phase;
   final VoidCallback onAnswer;
-  const _PhaseBanner({required this.phase, required this.onAnswer});
+  final bool isFounder;
+  const _PhaseBanner({required this.phase, required this.onAnswer, this.isFounder = false});
 
   @override
   Widget build(BuildContext context) {
@@ -425,12 +493,19 @@ class _PhaseBanner extends StatelessWidget {
           Icons.shield_outlined,
           'Identities are hidden. Never share your secret details here \u2014 you\u2019ll enter them in the verification step.',
         ),
-      ChatPhase.verifying => (
-          AppColors.warningLight,
-          AppColors.warning,
-          Icons.lock_outline_rounded,
-          'The finder started verification. Chat is locked until you answer their questions.',
-        ),
+      ChatPhase.verifying => isFounder
+          ? (
+              AppColors.warningLight,
+              AppColors.warning,
+              Icons.lock_outline_rounded,
+              'Waiting for the claimant to answer your challenge questions.',
+            )
+          : (
+              AppColors.warningLight,
+              AppColors.warning,
+              Icons.lock_outline_rounded,
+              'The finder started verification. Chat is locked until you answer their questions.',
+            ),
       ChatPhase.verified => (
           AppColors.successLight,
           AppColors.success,
@@ -455,7 +530,7 @@ class _PhaseBanner extends StatelessWidget {
           Icon(icon, size: 18, color: fg),
           const SizedBox(width: 10),
           Expanded(child: Text(text, style: AppTextStyles.bodyMuted)),
-          if (phase == ChatPhase.verifying)
+          if (phase == ChatPhase.verifying && !isFounder)
             TextButton(onPressed: onAnswer, child: const Text('Answer')),
         ],
       ),
@@ -526,14 +601,23 @@ class _Composer extends StatelessWidget {
                 ),
               ],
             ),
-          ChatPhase.verifying => SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onAnswer,
-                icon: const Icon(Icons.fact_check_outlined, size: 18),
-                label: const Text('Answer verification questions'),
-              ),
-            ),
+          ChatPhase.verifying => isFounder
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.hourglass_empty_rounded, size: 16, color: AppColors.textDisabled),
+                    const SizedBox(width: 8),
+                    Text('Waiting for claimant to verify.', style: AppTextStyles.bodyMuted),
+                  ],
+                )
+              : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: onAnswer,
+                    icon: const Icon(Icons.fact_check_outlined, size: 18),
+                    label: const Text('Answer verification questions'),
+                  ),
+                ),
           ChatPhase.verified => Row(
               children: [
                 Expanded(

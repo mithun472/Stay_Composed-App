@@ -27,6 +27,13 @@ NotificationType _parseType(String? raw) {
   );
 }
 
+DateTime _parseUtc(String raw) {
+  final normalized = (raw.endsWith('Z') || RegExp(r'[+-]\d{2}:\d{2}$').hasMatch(raw))
+      ? raw
+      : '${raw}Z';
+  return DateTime.parse(normalized);
+}
+
 class NotificationsController extends StateNotifier<AsyncValue<List<AppNotification>>> {
   NotificationsController(this._ref) : super(const AsyncValue.loading()) {
     fetch();
@@ -58,7 +65,7 @@ class NotificationsController extends StateNotifier<AsyncValue<List<AppNotificat
                 type: _parseType(e['type'] as String?),
                 title: e['title'] as String? ?? '',
                 body: e['body'] as String? ?? '',
-                createdAt: DateTime.parse(e['createdAt'] as String),
+                createdAt: _parseUtc(e['createdAt'] as String),
                 isRead: e['isRead'] as bool? ?? false,
                 relatedId: e['relatedId'] as String?,
               ))

@@ -44,14 +44,21 @@ class NotificationsScreen extends ConsumerWidget {
         NotificationType.matchFound => AppColors.primary,
       };
 
-  String _relativeTime(DateTime dt) {
-    final diff = DateTime.now().difference(dt.toLocal());
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.toLocal().day}/${dt.toLocal().month}/${dt.toLocal().year}';
-  }
+    String _relativeTime(DateTime createdAt) {
+  // Backend timestamps are UTC (see _parseUtc in notifications_provider.dart).
+  // Convert explicitly to IST (UTC+5:30) instead of toLocal(), since
+  // toLocal() depends on the device's timezone setting, not India time.
+  final istOffset = const Duration(hours: 5, minutes: 30);
+  final dt = (createdAt.isUtc ? createdAt : createdAt.toUtc()).add(istOffset);
+  final nowIst = DateTime.now().toUtc().add(istOffset);
+
+  final diff = nowIst.difference(dt);
+  if (diff.inSeconds < 60) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${dt.day}/${dt.month}/${dt.year}';
+}
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,8 +85,8 @@ class NotificationsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               const Text('Could not load notifications.'),
               const SizedBox(height: 4),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
                   'Check the backend URL in Settings and try again.',
                   textAlign: TextAlign.center,

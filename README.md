@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="stay_composed.png" alt="Stay Composed" width="500" height="500"/>
+<img src="stay_composed.png" alt="Stay Composed" width="260" height="260"/>
 
 # 🌟 Stay Composed — Mobile App
 

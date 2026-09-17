@@ -110,12 +110,42 @@ enum BloodRequestStatus {
       };
 }
 
+/// Mirrors the canonical type list in the backend's
+/// app/services/notification_service.py (KNOWN_TYPES) exactly. The backend
+/// sends snake_case; notifications_provider.dart's _parseType() converts
+/// snake_case -> camelCase to land here.
+///
+/// These previously did not overlap with the backend's strings at all
+/// (`possibleMatch` / `verificationRequest` / `claimApproved` vs the
+/// backend's `match_found` / `chat_opened` / `verification_completed`), so
+/// every single notification fell through to the orElse fallback and
+/// rendered as the wrong type. Adding a value on either side without
+/// adding its twin here reintroduces that silent failure.
 enum NotificationType {
-  possibleMatch,
-  verificationRequest,
-  claimApproved,
-  claimRejected,
-  chatExpiring,
+  matchFound,
+  chatOpened,
+  chatMessage,
+  verificationCompleted,
+  verificationFailed,
   bloodRequestCreated,
-  bloodRequestUpdated,
+  bloodRequestUpdated;
+
+  String get label => switch (this) {
+        NotificationType.matchFound => 'Possible Match',
+        NotificationType.chatOpened => 'Chat Opened',
+        NotificationType.chatMessage => 'New Message',
+        NotificationType.verificationCompleted => 'Ownership Verified',
+        NotificationType.verificationFailed => 'Verification Failed',
+        NotificationType.bloodRequestCreated => 'Blood Alert Sent',
+        NotificationType.bloodRequestUpdated => 'Blood Alert Updated',
+      };
+
+  /// True for events that belong to the TrueOwner module; false routes to
+  /// the blood donation dashboard.
+  bool get isTrueOwner => switch (this) {
+        NotificationType.bloodRequestCreated ||
+        NotificationType.bloodRequestUpdated =>
+          false,
+        _ => true,
+      };
 }

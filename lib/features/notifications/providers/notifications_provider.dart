@@ -6,19 +6,24 @@ import '../../../models/enums.dart';
 import '../../../models/notification_model.dart';
 import '../../authentication/providers/auth_provider.dart';
 
-/// Backend is assumed to send `type` as snake_case (matching the FCM
-/// payload convention used elsewhere, e.g. 'possible_match'). If it
-/// actually sends camelCase enum names instead, drop the snake->camel
-/// conversion below and just use NotificationType.values.byName(raw).
+/// Backend sends `type` as snake_case — the canonical list lives in
+/// app/services/notification_service.py (KNOWN_TYPES). This converts
+/// snake_case -> camelCase to match [NotificationType].
+///
+/// The fallback is deliberately [NotificationType.matchFound] and NOT a
+/// silent no-op: if this ever starts firing for every notification, the
+/// two type lists have drifted apart again (that is exactly what happened
+/// when the enum still held `possibleMatch` / `verificationRequest` and
+/// the backend was sending `match_found` / `verification_completed`).
 NotificationType _parseType(String? raw) {
-  if (raw == null) return NotificationType.possibleMatch;
+  if (raw == null) return NotificationType.matchFound;
   final camel = raw.replaceAllMapped(
     RegExp(r'_([a-z])'),
     (m) => m.group(1)!.toUpperCase(),
   );
   return NotificationType.values.firstWhere(
     (t) => t.name == camel,
-    orElse: () => NotificationType.possibleMatch,
+    orElse: () => NotificationType.matchFound,
   );
 }
 
@@ -29,8 +34,11 @@ class NotificationsController extends StateNotifier<AsyncValue<List<AppNotificat
 
   final Ref _ref;
 
-  Future<void> fetch() async {
-    state = const AsyncValue.loading();
+  /// [silent] keeps the current list on screen while refetching, instead of
+  /// flashing a spinner. Used by the app-resume and foreground-push
+  /// refresh paths, where a full loading state would be jarring.
+  Future<void> fetch({bool silent = false}) async {
+    if (!silent) state = const AsyncValue.loading();
     try {
       final email = _ref.read(authControllerProvider).user?.collegeEmail;
       final baseUrl = await BackendConfig.getBaseUrl();
@@ -39,8 +47,10 @@ class NotificationsController extends StateNotifier<AsyncValue<List<AppNotificat
         return;
       }
 
-      // ASSUMPTION: GET /notifications?email=... — confirm real path/shape
-      // with backend. Adjust field names below if response differs.
+      // GET /notifications?email=... — see app/routers/notifications.py.
+      // Response fields match one-for-one with the parsing below; changing
+      // either side without the other yields a parse failure that surfaces
+      // as the generic "Could not load notifications" error state.
       final res = await Dio().get('$baseUrl/notifications', queryParameters: {'email': email});
       final list = (res.data as List)
           .map((e) => AppNotification(
@@ -55,6 +65,9 @@ class NotificationsController extends StateNotifier<AsyncValue<List<AppNotificat
           .toList();
       state = AsyncValue.data(list);
     } catch (err, st) {
+      // On a silent refresh, don't destroy a good list because one
+      // background refetch failed (flaky tunnel, backend restarting).
+      if (silent && state.hasValue) return;
       state = AsyncValue.error(err, st);
     }
   }
@@ -71,15 +84,25 @@ class NotificationsController extends StateNotifier<AsyncValue<List<AppNotificat
     try {
       final baseUrl = await BackendConfig.getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) return;
-      // ASSUMPTION: POST /notifications/{id}/read — confirm with backend.
+      // POST /notifications/{id}/read — see app/routers/notifications.py.
       await Dio().post('$baseUrl/notifications/$id/read');
     } catch (_) {
-      // best-effort
+      // best-effort — the optimistic local update above already stands
     }
   }
+
+  /// Unread count for badges. Returns 0 while loading or on error rather
+  /// than throwing, so callers can use it in a build() without guarding.
+  int get unreadCount => state.value?.where((n) => !n.isRead).length ?? 0;
 }
 
 final notificationsProvider =
     StateNotifierProvider<NotificationsController, AsyncValue<List<AppNotification>>>(
   (ref) => NotificationsController(ref),
 );
+
+/// Convenience for app-bar badges.
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  final async = ref.watch(notificationsProvider);
+  return async.value?.where((n) => !n.isRead).length ?? 0;
+});

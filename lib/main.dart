@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/constants/app_constants.dart';
 import 'core/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/notifications/providers/notifications_provider.dart';
 import 'services/push_notification_service.dart';
 
 /// Must be a top-level (or static) function — Dart isolate restriction on
@@ -25,6 +26,11 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   // shows the system notification automatically for background/terminated
   // state as long as the payload has a "notification" block (see
   // push_service.py, which always sends one).
+  //
+  // The in-app feed row is NOT written here. It's written server-side by
+  // notification_service.notify() before the push is even sent, which is
+  // what makes the Notifications screen correct regardless of whether any
+  // push was delivered.
 }
 
 Future<void> main() async {
@@ -46,10 +52,11 @@ class StayComposedApp extends ConsumerStatefulWidget {
   ConsumerState<StayComposedApp> createState() => _StayComposedAppState();
 }
 
-class _StayComposedAppState extends ConsumerState<StayComposedApp> {
+class _StayComposedAppState extends ConsumerState<StayComposedApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Deferred to post-frame: PushNotificationService reads the signed-in
     // user via ref, which needs the widget tree (and auth provider) up
     // first. Registering the token is what makes /devices/register calls
@@ -57,6 +64,24 @@ class _StayComposedAppState extends ConsumerState<StayComposedApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(pushNotificationServiceProvider).initialize(ref);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// NotificationsController only fetches once, in its constructor. Without
+  /// this, anything that arrived while the app was backgrounded stayed
+  /// invisible until the provider happened to be rebuilt — which reads as
+  /// "push works but the in-app list never updates". Refetch on resume,
+  /// silently so the existing list doesn't flash a spinner.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(notificationsProvider.notifier).fetch(silent: true);
+    }
   }
 
   @override

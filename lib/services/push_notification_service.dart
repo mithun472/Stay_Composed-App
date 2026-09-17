@@ -126,14 +126,21 @@ class PushNotificationService {
   /// notifications list and match/thread lists are current the moment the
   /// user looks — not only after a manual pull-to-refresh.
   void _refreshForMessage(WidgetRef ref, Map<String, dynamic> data) {
-    ref.read(notificationsProvider.notifier).fetch();
+    // Silent: the user may already be looking at the list, and a spinner
+    // replacing it mid-read is worse than a one-frame-stale list.
+    ref.read(notificationsProvider.notifier).fetch(silent: true);
     final type = data['type'] as String?;
-    // 'chat_opened' is what app/routers/chat.py actually sends the founder
-    // when a claimant opens a thread on their item — 'match_found' was my
-    // guess and doesn't match any type string in that file (may exist in
-    // a separate items.py matching flow I haven't seen; harmless to keep
-    // as a no-op check if it never fires).
-    if (type == 'match_found' || type == 'chat_opened' || type == 'chat_message') {
+    // Canonical list: app/services/notification_service.py KNOWN_TYPES.
+    // Everything except the blood_request_* pair concerns TrueOwner state
+    // (candidate matches, threads, verification status), so invalidate it.
+    const trueOwnerTypes = {
+      'match_found',
+      'chat_opened',
+      'chat_message',
+      'verification_completed',
+      'verification_failed',
+    };
+    if (type != null && trueOwnerTypes.contains(type)) {
       invalidateTrueOwner(ref);
     }
   }
@@ -159,20 +166,25 @@ class PushNotificationService {
 
     switch (type) {
       case 'match_found':
+      case 'verification_completed':
+      case 'verification_failed':
         router.go(AppRoutes.trueOwnerDashboard);
         break;
       case 'chat_opened':
         // Sent to a founder when a claimant opens a thread on their item
-        // (app/routers/chat.py::get_or_create_thread) — previously fell
-        // through to `default` and did nothing on tap. relatedId here is
-        // a real thread id, same shape as chat_message's, but we don't
-        // have a fetch-by-id path wired up yet either — dashboard for now.
+        // (app/routers/chat.py::get_or_create_thread). relatedId here is
+        // a real thread id, same shape as chat_message's, but there's no
+        // fetch-by-id path wired up yet — dashboard for now.
       case 'chat_message':
         final threadId = data['relatedId'] as String?;
         if (threadId == null) break;
         // TODO: fetch ChatThread by threadId, then:
         // router.push(AppRoutes.chat, extra: fetchedThread);
         router.go(AppRoutes.trueOwnerDashboard);
+        break;
+      case 'blood_request_created':
+      case 'blood_request_updated':
+        router.go(AppRoutes.bloodDashboard);
         break;
       default:
         break;

@@ -1,122 +1,287 @@
-# Stay Composed — Flutter Frontend (Phase 1)
+<div align="center">
 
-This is Phase 1 of the Stay Composed frontend: project setup, theme, routing,
-authentication UI, the home dashboard, and every model/service interface the
-rest of the app will build on. TrueOwner and Blood Donation feature screens
-land in Phases 2 and 3.
+<img src="assets/images/stay_composed_logo.png" alt="Stay Composed" width="160"/>
 
-## 1. Install Flutter
+# 🌟 Stay Composed — Mobile App
 
-1. Download the Flutter SDK for your OS: https://docs.flutter.dev/get-started/install
-2. Extract it somewhere permanent, e.g. `~/development/flutter`.
-3. Add it to your PATH (macOS/Linux, add to `.zshrc`/`.bashrc`):
-   ```
-   export PATH="$PATH:$HOME/development/flutter/bin"
-   ```
-4. Verify:
-   ```
-   flutter doctor
-   ```
-   Resolve any red ❌ items it reports (Android SDK, Xcode, etc).
+### *Flutter client for Campus Lost & Found + Emergency Blood Alerts*
 
-## 2. Editor setup
+[![Flutter](https://img.shields.io/badge/Flutter-3.3+-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev/)
+[![Dart](https://img.shields.io/badge/Dart-3.3-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev/)
+[![Riverpod](https://img.shields.io/badge/State-Riverpod_2.5-4B32C3?style=for-the-badge&logo=flutter&logoColor=white)](https://riverpod.dev/)
+[![go_router](https://img.shields.io/badge/Routing-go__router_14-00B4AB?style=for-the-badge&logo=flutter&logoColor=white)](https://pub.dev/packages/go_router)
+[![Firebase](https://img.shields.io/badge/Push-Firebase_FCM-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![WebSocket](https://img.shields.io/badge/Realtime-WebSockets-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
+[![Cloudinary](https://img.shields.io/badge/Storage-Cloudinary_CDN-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white)](https://cloudinary.com/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
-Either works — install the **Flutter** and **Dart** extensions:
-- **VS Code**: Extensions panel → search "Flutter" → install (Dart comes with it).
-- **Android Studio**: Preferences → Plugins → search "Flutter" → install → restart.
+**Campus help reaching the right person, fast — without panic or vulnerability.**
 
-## 3. Get the project running
+[✨ Features](#-key-features) • [🏗️ Architecture](#️-architecture) • [🎨 Design System](#-design-system) • [🚀 Quick Start](#-getting-started) • [🔌 API Surface](#-api-surface) • [📁 Structure](#-project-structure)
 
-From inside this folder:
+</div>
 
-```bash
-flutter pub get
-flutter run
+---
+
+## 📌 Overview
+
+**Stay Composed** is the Flutter front end of the TrueOwner campus platform. It talks to a FastAPI + MongoDB backend that runs CLIP multimodal matching, bcrypt-hashed ownership challenges, and SMTP blood-alert broadcasts.
+
+| | |
+| --- | --- |
+| **Package** | `stay_composed` · `v0.1.0+1` |
+| **SDK** | Dart `>=3.3.0 <4.0.0` |
+| **State** | `flutter_riverpod` (`ProviderScope` at root) |
+| **Routing** | `go_router` — declarative, auth-redirect aware |
+| **Transport** | `dio` (REST) + `web_socket_channel` (live chat) |
+| **Auth** | `google_sign_in` — backend verifies the domain and the token |
+| **Backend URL** | Runtime-configurable in Settings, persisted in `SharedPreferences` |
+
+> [!NOTE]
+> The base URL is **not** compiled in. Point the app at any backend (localhost, LAN, ngrok tunnel) from the Settings screen — no rebuild, no reinstall.
+
+---
+
+## ✨ Key Features
+
+### 🔍 1. TrueOwner — Lost & Found
+
+- **Report Lost / Report Found** flows with photo capture (`image_picker`) and direct Cloudinary unsigned upload.
+- **Zero public browsing.** Found items never render in a public list; they surface only against a matching lost report.
+- **Match confidence UI** — candidate cards rendered from backend cosine-similarity scores.
+- **Fixed campus location dropdown**, kept byte-for-byte in sync with the backend's `locations.py` because match scoring compares location strings exactly.
+
+### 🛡️ 2. Ownership Challenge Screen
+
+- Finder sets 1–3 secret questions at report time; answers leave the device already destined for bcrypt hashing.
+- Claimant answers inside `claim_screen.dart`; server does exact match first, semantic fallback second.
+- Attempt counter and lockout state surfaced through `StatusBadge` + `api_result.dart` error mapping.
+
+### 💬 3. Real-Time Handover Chat
+
+- `chat_socket_service.dart` opens `wss://<host>/chat/ws/{thread_id}?email=`.
+- **Scheme auto-swap**: `https → wss`, `http → ws`. Swapping tunnels needs no code change.
+- **Presence heartbeat** so a half-dead backgrounded socket does not leave a user falsely "online".
+- Never throws — every failure path (missing URL, refused connect, stale tunnel) degrades to an offline state instead of crashing the screen.
+- One-tap campus meeting-point chips.
+
+### 🩸 4. Emergency Blood Alert
+
+- `blood_alert_form_screen.dart` → `POST /blood-alert` → backend fans out over SMTP to staff and student directories.
+- `my_blood_alerts_screen.dart` tracks alerts the user raised.
+- All 8 blood groups, dedicated red accent so the module is never confused with TrueOwner at a glance.
+
+### 🔔 5. Push Notifications (FCM)
+
+- Top-level `@pragma('vm:entry-point')` background handler — registered as an instance method it silently no-ops, so it lives outside the class on purpose.
+- Token registration deferred to `addPostFrameCallback` so the signed-in email is attached to `/devices/register`.
+- Foreground banners via `flutter_local_notifications`; tap-to-route through `onMessageOpenedApp` / `getInitialMessage`.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     Flutter Client                       │
+│                                                          │
+│   features/         core/              services/         │
+│   ├─ authentication ├─ routes          ├─ auth           │
+│   ├─ true_owner     ├─ theme           ├─ google_auth    │
+│   ├─ blood_donation ├─ network         ├─ true_owner     │
+│   ├─ notifications  ├─ config          ├─ blood_alert    │
+│   ├─ profile        ├─ constants       ├─ chat_socket    │
+│   ├─ settings       ├─ widgets         ├─ cloudinary     │
+│   └─ home           └─ utils           └─ push_notif     │
+└───────────────┬──────────────────────────┬───────────────┘
+                │ dio / REST               │ WebSocket
+                ▼                          ▼
+        ┌───────────────────────────────────────────┐
+        │        FastAPI backend (Python)           │
+        │  CLIP embeddings · bcrypt · SMTP · FCM    │
+        └──────────────┬─────────────┬──────────────┘
+                       ▼             ▼
+               MongoDB Atlas    Cloudinary CDN
 ```
 
-`flutter run` will list connected devices/emulators/simulators if more than
-one is available. To open an Android emulator: Android Studio → Device
-Manager → start a virtual device, then re-run `flutter run`. For iOS, you
-need a Mac with Xcode and can use `open -a Simulator`.
+**Layering rule:** screens never call `dio` directly. Screens → Riverpod providers → services → `api_client.dart`. Every service returns `ApiResult<T>`, so error handling is one `switch` at the widget layer instead of scattered `try/catch`.
 
-The app runs entirely on **mock data** right now — no backend, no real
-Google OAuth client ID — so `flutter run` should work immediately after
-`flutter pub get`.
+---
 
-## 4. What's implemented in Phase 1
+## 🎨 Design System
 
-- **State management: Riverpod** (`flutter_riverpod`). Chosen because:
-  - It scales cleanly from a single `AuthController` today to the many
-    independent-but-related controllers this app will need (lost reports,
-    found reports, matches, verification, chat, blood requests) without a
-    global store or heavy boilerplate.
-  - Providers are easy to override in tests and easy to swap (mock service
-    → real service) by changing one line, which matters a lot here since
-    the backend is being built separately.
-  - `StateNotifierProvider` gives explicit, typed states (`AuthStatus.authenticating`,
-    `.error`, `.unauthorizedDomain`, etc.) which maps directly onto the
-    loading/success/error/empty UI requirement in the spec.
-- **Routing: go_router**, redirect-driven off auth state — unauthenticated
-  users always land on `/login`, authenticated users skip it.
-- **Theme**: Material 3, a dedicated indigo/teal/red palette (see
-  `lib/core/theme/app_colors.dart`) so TrueOwner and Blood Donation stay
-  visually distinct.
-- **Auth UI**: splash → Google sign-in button → loading / error /
-  unauthorized-college-domain states, all wired to a `MockAuthService`.
-- **Home dashboard**: header (avatar, notifications, logout with
-  confirmation dialog) + the two feature cards, nothing else — per the
-  "no public feed" requirement.
-- **All data models** (`lib/models/`) for both features, with lost/found
-  object models deliberately splitting **public** fields from the
-  **secret verification info** field so that boundary is enforced by the
-  type system, not by screen-level discipline.
-- **All service interfaces** (`lib/services/`) — `AuthService`,
-  `TrueOwnerService`, `ChatService`, `BloodDonationService`,
-  `ImageUploadService`, `AIService` — each documented with a
-  `TODO: Connect backend API here` next to the parts a real API
-  implementation needs to fill in.
-- Placeholder (but real, navigable) TrueOwner and Blood Donation dashboard
-  screens so the whole flow — login → home → into each feature — already
-  works end to end.
+Calm, institutional "campus security" feel — not a playful consumer palette.
 
-## 5. Folder structure
+| Token | Hex | Usage |
+| --- | --- | --- |
+| **Deep Indigo** | `#2D3A8C` | Brand anchor, primary buttons, app bars |
+| **Indigo Dark** | `#1E2762` | Pressed states, gradient ends |
+| **Teal** | `#0F9B8E` | TrueOwner accent, verification actions |
+| **Deep Red** | `#C62828` | Blood Donation only — never for TrueOwner |
+| **Canvas** | `#F7F8FC` | App background |
+| **Surface** | `#FFFFFF` | Cards, sheets, dialogs |
+| **Ink** | `#1A1C2E` | Primary text |
+| **Slate** | `#5C5F72` | Secondary text, expired states |
+| **Success** | `#1E8E3E` | Verified, resolved |
+| **Warning** | `#B07A00` | Pending verification |
+
+> [!TIP]
+> Blood red is reserved. Keeping TrueOwner on teal and Blood on red means a user knows which module they are in from a single glance at the accent color.
+
+---
+
+## 📁 Project Structure
 
 ```
 lib/
+├── main.dart                          # Bootstrap: dotenv → Firebase → ProviderScope
+│
 ├── core/
-│   ├── constants/     # app_constants.dart — college domains, config defaults
-│   ├── theme/         # colors, text styles, ThemeData
-│   ├── routes/        # route constants + GoRouter setup
-│   ├── utils/         # ApiResult (loading/success/error wrapper)
-│   └── widgets/       # PrimaryButton, StatusBadge, empty/error/loading views
-├── features/
-│   ├── authentication/  # splash, login, auth provider
-│   ├── home/             # dashboard screen + feature card widget
-│   ├── true_owner/       # dashboard placeholder (Phase 2 fills this out)
-│   └── blood_donation/   # dashboard placeholder (Phase 3 fills this out)
-├── models/             # AppUser, LostObject, FoundObject, MatchResult,
-│                        # VerificationRequest, Claim, Chat, BloodRequest, etc.
-├── services/           # abstractions only — mock implementations arrive
-│                        # in Phase 2/3 alongside the screens that use them
-└── main.dart
+│   ├── config/backend_config.dart     # Runtime base URL + Riverpod notifier
+│   ├── constants/
+│   │   ├── app_constants.dart         # App name, blood groups, categories, domains
+│   │   └── campus_locations.dart      # Fixed dropdown — mirrors backend locations.py
+│   ├── network/api_client.dart        # dio wrapper, headers, error normalization
+│   ├── routes/
+│   │   ├── app_router.dart            # go_router config + auth redirects
+│   │   └── app_routes.dart            # Path constants — never hardcode strings
+│   ├── theme/                         # app_colors · app_text_styles · app_theme
+│   ├── utils/api_result.dart          # Success / Failure union type
+│   └── widgets/                       # primary_button · status_badge · placeholders
+│
+├── models/                            # 13 immutable models (equatable)
+│   ├── item_model.dart                ├── blood_request_model.dart
+│   ├── lost_object_model.dart         ├── blood_alert_model.dart
+│   ├── found_object_model.dart        ├── chat_thread_model.dart
+│   ├── match_result_model.dart        ├── chat_model.dart
+│   ├── claim_model.dart               ├── notification_model.dart
+│   ├── verification_model.dart        ├── user_model.dart
+│   └── enums.dart
+│
+├── services/
+│   ├── auth_service.dart              ├── chat_socket_service.dart
+│   ├── google_auth_service.dart       ├── cloudinary_service.dart
+│   ├── true_owner_service.dart        ├── push_notification_service.dart
+│   ├── blood_alert_service.dart       └── other_services.dart
+│
+└── features/
+    ├── authentication/                # splash · login · auth_provider
+    ├── home/                          # home_screen · feature_card
+    ├── true_owner/                    # dashboard · report · detail · claim · chat
+    ├── blood_donation/                # dashboard · alert form · my alerts
+    ├── notifications/                 # screen + provider
+    ├── profile/                       # history, resolved reports
+    └── settings/                      # backend URL, preferences
+
+assets/images/stay_composed_logo.png   # Also the launcher icon source
 ```
 
-## 6. Connecting your real backend later
+---
 
-Every place that needs a real API call is marked `TODO: Connect backend API
-here`. The pattern throughout is: **screens never call `dio`/HTTP directly**
-— they only depend on the abstract service interfaces in `lib/services/`.
-To go live, you write one new class per interface (e.g. `ApiAuthService
-implements AuthService`) and swap the single `Provider` that constructs it
-(e.g. `authServiceProvider` in `auth_provider.dart`). No screen code changes.
+## 🔌 API Surface
 
-## 7. What's next
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/items` | Register a lost or found report |
+| `GET` | `/items` | Candidate matches for the caller |
+| `GET` | `/items/mine` | Caller's own reports |
+| `POST` | `/claims` | Submit ownership challenge answers |
+| `GET` | `/chat/my-threads` | Active handover threads |
+| `GET` | `/chat/thread` | Message history for one thread |
+| `WS` | `/chat/ws/{thread_id}?email=` | Live chat + presence |
+| `POST` | `/blood-alert` | Broadcast an emergency blood request |
+| `GET` | `/blood-alert/mine` | Alerts raised by the caller |
 
-- **Phase 2** — TrueOwner: Report Lost / Report Found forms (with the
-  secret-verification-info UI treatment), AI-matching state, match result
-  cards, owner↔finder connection, two-sided verification flow, private
-  chat, claim success, My Lost/Found Objects.
-- **Phase 3** — Blood Donation: request form, request detail, send-to-departments
-  flow, request history.
-- **Phase 4** — Profile, notifications, polish pass (animations, empty/error
-  states everywhere, responsive QA on tablet sizes).
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Flutter** `3.19+` (Dart `3.3+`) — `flutter doctor` clean
+- **Android Studio** / Xcode toolchain
+- A running **Stay Composed FastAPI backend** (reachable from the device)
+- **Firebase project** with an Android app registered
+- **Cloudinary** cloud name + unsigned upload preset
+
+### 1️⃣ Install
+
+```bash
+git clone <this-repo>
+cd stay_composed
+flutter pub get
+```
+
+### 2️⃣ Environment
+
+```bash
+cp .env.example .env
+```
+
+```env
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_UPLOAD_PRESET=your-unsigned-preset
+```
+
+> [!WARNING]
+> Public values only. `GOOGLE_CLIENT_SECRET`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, and `NEXTAUTH_SECRET` stay in the **backend** `.env`. Anything in this file ships inside the APK and is readable by anyone who unzips it.
+
+### 3️⃣ Firebase
+
+Drop `google-services.json` into `android/app/`. Register the SHA-1 for Google Sign-In:
+
+```bash
+cd android && ./gradlew signingReport
+```
+
+### 4️⃣ Launcher icon
+
+```bash
+flutter pub run flutter_launcher_icons
+```
+
+### 5️⃣ Run
+
+```bash
+flutter run
+# release APK
+flutter build apk --release
+```
+
+### 6️⃣ Point at the backend
+
+Open the app → **Settings** → paste the base URL (e.g. `https://abcd-1234.ngrok-free.app`) → save. Persisted across restarts; trailing slashes are stripped automatically.
+
+---
+
+## 🔐 Security Notes
+
+> [!IMPORTANT]
+> - **No secrets in the client.** `.env` carries public Cloudinary values only; the backend holds every credential.
+> - **Domain-locked sign-in.** Only verified institutional accounts (`tcarts.in`) onboard — enforced server-side, not just in the UI.
+> - **Answers never leave in plaintext storage.** Challenge answers are bcrypt-hashed on the backend; the client keeps no copy.
+> - **`SharedPreferences` is a cache, not a source of truth.** Session data only; the server re-validates every request.
+> - **Policy lives on the server.** Attempt limits, chat expiry, and unclaimed timeouts in `AppConfig` are frontend defaults meant to be overridden by API values.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Replace `AppConfig` constants with a remote-config endpoint
+- [ ] Fetch allowed email domains from the server instead of a hardcoded list
+- [ ] Offline queue for reports filed without connectivity
+- [ ] Dark theme tokens (`AppColors` is already token-based)
+- [ ] iOS release build + APNs wiring
+- [ ] Widget and integration test coverage
+
+---
+
+<div align="center">
+
+**Built with ❤️ for campus safety and student support.**
+
+Thanks to the open-source work behind **Flutter**, **Riverpod**, **OpenAI CLIP**, **FastAPI**, and **Firebase**.
+
+*Stay Composed • TrueOwner Verification System • 2026*
+
+</div>
